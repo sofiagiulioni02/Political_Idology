@@ -1,7 +1,7 @@
 #Cleaning and merging the data
 library(haven)
 library(dplyr)
-
+library(tidyr)
 
 # helper: legge il primo .dta che trova in una cartella
 read_first_dta <- function(folder) {
@@ -41,6 +41,10 @@ map_wv5 <- c(
   Trust_politicalParties = "V139",
   Trust_BigCompanies = "V142",
   Trust_LaborUnions = "V135",
+  Trust_police = "V136",
+  Trust_JusticeSystem = "V137",
+  Trust_Parliament = "V140",
+  Trust_Civil_Service = "V141",
   meritocracy = "V120",
   importance_democracy = "V162",
   sex = "V235",
@@ -48,10 +52,6 @@ map_wv5 <- c(
   Respondent_education_level = "V238",
   Social_class = "V252",
   Income_group = "V253",
-  Trust_police = "V136",
-  Trust_JusticeSystem = "V137",
-  Trust_Parliament = "V140",
-  Trust_Civil_Service = "V141",
   country_codeISO = "V2",
   InterviewNumber = "V3"
 )
@@ -72,6 +72,10 @@ map_wv6 <- c(
   Trust_BigCompanies = "V120",
   Trust_Banks = "V121",
   Trust_LaborUnions = "V112",
+  Trust_police = "V113",
+  Trust_JusticeSystem = "V114",
+  Trust_Parliament = "V117",
+  Trust_Civil_Service = "V118",
   meritocracy = "V100",
   importance_democracy = "V140",
   sex = "V240",
@@ -79,10 +83,6 @@ map_wv6 <- c(
   Respondent_education_level = "V248",
   Social_class = "V238",
   Income_group = "V239",
-  Trust_police = "V113",
-  Trust_JusticeSystem = "V114",
-  Trust_Parliament = "V117",
-  Trust_Civil_Service = "V118",
   country_codeISO = "V2",
   InterviewNumber = "V3"
 )
@@ -103,6 +103,11 @@ map_wv7 <- c(
   Trust_BigCompanies = "Q77",
   Trust_Banks = "Q78",
   Trust_LaborUnions = "Q68",
+  Trust_police = "Q69",
+  Trust_JusticeSystem = "Q70",
+  Trust_Parliament = "Q73",
+  Trust_Civil_Service = "Q74",
+  Trust_Elections = "Q76",
   meritocracy = "Q110",
   importance_democracy = "Q250",
   sex = "Q260",
@@ -112,11 +117,6 @@ map_wv7 <- c(
   Father_education_level = "Q278",
   Social_class = "Q287",
   Income_group = "Q288",
-  Trust_police = "Q69",
-  Trust_JusticeSystem = "Q70",
-  Trust_Parliament = "Q73",
-  Trust_Civil_Service = "Q74",
-  Trust_Elections = "Q76",
   country_codeISO = "B_COUNTRY",
   InterviewNumber = "D_INTERVIEW"
 )
@@ -206,9 +206,116 @@ wvs_567_core <- wvs_567_core %>%
 dir.create("data/processed", showWarnings = FALSE, recursive = TRUE)
 saveRDS(wvs_567_core, "data/processed/wvs_567_core.rds")
 
+#read database
+wvs_567_core <- readRDS("data/processed/wvs_567_core.rds")
+names(wvs_567_core)
+dim(wvs_567_core)
+head(wvs_567_core)
 
+#Before proceeding, let's check that all variables have valid values, 
+#i.e. there is no wrongly recorded value, i.e. all values are inside the plausible range
 
+ranges_global <- tribble(
+  ~var,                       ~min, ~max,
+  "polselfplacement",            1,   10,
+  "pref_for_equality",           1,   10,
+  "pref_privatisation",          1,   10,
+  "pref_redistribution",         1,   10,
+  "pref_competition",            1,   10,
+  "life_satisfaction",           1,   10,
+  "happiness",                   1,    4,
+  "HH_finacialsatisfaction",     1,   10,
+  "Trust_people",                1,    2,
+  "Trust_GOV",                   1,    4,
+  "Trust_politicalParties",      1,    4,
+  "Trust_BigCompanies",          1,    4,
+  "Trust_Banks",                 1,    4,
+  "Trust_LaborUnions",           1,    4,
+  "Trust_police",                1,    4,
+  "Trust_JusticeSystem",         1,    4,
+  "Trust_Parliament",            1,    4,
+  "Trust_Civil_Service",         1,    4,
+  "Trust_Elections",             1,    4,
+  "meritocracy",                 1,   10,
+  "importance_democracy",        1,   10,
+  "sex",                         1,    2,
+  "age",                         0,  120,
+  "Social_class",                1,    5,
+  "Income_group",                1,   10
+)
 
+range_diagnostics <- function(df, ranges_global, ranges_by_wave = NULL) {
+  
+  long <- df %>%
+    select(wave, any_of(ranges_global$var),
+           any_of(if (!is.null(ranges_by_wave)) unique(ranges_by_wave$var) else character(0))) %>%
+    pivot_longer(cols = -wave, names_to = "var", values_to = "value")
+  
+  diag_global <- long %>%
+    inner_join(ranges_global, by = "var") %>%
+    group_by(var, wave) %>%
+    summarise(
+      n_nonmiss = sum(!is.na(value)),
+      obs_min = suppressWarnings(min(value, na.rm = TRUE)),
+      obs_max = suppressWarnings(max(value, na.rm = TRUE)),
+      n_out = sum(value < min | value > max, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  if (!is.null(ranges_by_wave)) {
+    diag_wave <- long %>%
+      inner_join(ranges_by_wave, by = c("var", "wave")) %>%
+      group_by(var, wave) %>%
+      summarise(
+        n_nonmiss = sum(!is.na(value)),
+        obs_min = suppressWarnings(min(value, na.rm = TRUE)),
+        obs_max = suppressWarnings(max(value, na.rm = TRUE)),
+        n_out = sum(value < min | value > max, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    diag_global <- diag_global %>%
+      anti_join(ranges_by_wave %>% select(var, wave),
+                by = c("var", "wave")) %>%
+      bind_rows(diag_wave)
+  }
+  
+  diag_global <- diag_global %>% mutate(wave_label = as.character(wave))
+  
+  overall <- diag_global %>%
+    group_by(var) %>%
+    summarise(
+      wave = NA_real_,
+      n_nonmiss = sum(n_nonmiss),
+      obs_min = suppressWarnings(min(obs_min, na.rm = TRUE)),
+      obs_max = suppressWarnings(max(obs_max, na.rm = TRUE)),
+      n_out = sum(n_out),
+      .groups = "drop"
+    ) %>%
+    mutate(wave_label = "ALL")
+  
+  bind_rows(diag_global, overall) %>%
+    arrange(var, wave_label)
+}
+
+diag <- range_diagnostics(wvs_567_core, ranges_global)
+diag %>% filter(n_out > 0)
+
+#let's check that also for education
+wvs_567_core %>%
+  mutate(edu_raw = as.numeric(Respondent_education_level)) %>%
+  group_by(wave) %>%
+  summarise(
+    obs_min = min(edu_raw, na.rm = TRUE),
+    obs_max = max(edu_raw, na.rm = TRUE),
+    n_out = sum(
+      (wave %in% c(5,6) & (edu_raw < 1 | edu_raw > 9)) |
+        (wave == 7 & (edu_raw < 0 | edu_raw > 8)),
+      na.rm = TRUE
+    )
+  )
+
+#Now I can proceed with recoding, invetign scales etc.
 
 
 
