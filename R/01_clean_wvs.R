@@ -34,9 +34,9 @@ map_wv5 <- c(
   pref_redistribution = "V118",
   pref_competition = "V119",
   happiness = "V10",
-  life_satisfaction = "V22",
+  life_satisfaction = "V22", #######
   HH_finacialsatisfaction = "V68",
-  Trust_people = "V23",
+  Trust_people = "V23",########
   Trust_GOV = "V138",
   Trust_politicalParties = "V139",
   Trust_BigCompanies = "V142",
@@ -46,10 +46,10 @@ map_wv5 <- c(
   Trust_Parliament = "V140",
   Trust_Civil_Service = "V141",
   meritocracy = "V120",
-  importance_democracy = "V162",
-  sex = "V235",
+  importance_democracy = "V162", #########
+  sex = "V235",#######
   age = "V237",
-  Respondent_education_level = "V238",
+  Respondent_education_level = "V238",#########
   Social_class = "V252",
   Income_group = "V253",
   country_codeISO = "V2",
@@ -212,9 +212,9 @@ names(wvs_567_core)
 dim(wvs_567_core)
 head(wvs_567_core)
 
+
 #Before proceeding, let's check that all variables have valid values, 
 #i.e. there is no wrongly recorded value, i.e. all values are inside the plausible range
-
 ranges_global <- tribble(
   ~var,                       ~min, ~max,
   "polselfplacement",            1,   10,
@@ -316,7 +316,6 @@ wvs_567_core %>%
   )
 
 #Now I can proceed with recoding, invetign scales etc.
-
-
+renv::snapshot()
 
 
