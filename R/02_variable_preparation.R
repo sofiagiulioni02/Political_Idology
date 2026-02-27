@@ -3,9 +3,9 @@ library(dplyr)
 #Load database
 wvs_567_core <- readRDS("data/processed/wvs_567_core.rds")
 
-#making the scales of the varibales consistent, i.e. higher values menans higher support for the variabele
-#so this means inverting some scales
-
+# Adjusting scales and Recoding  ------------------------------------------
+#making the scales of the varibales consistent, i.e. higher values menas higher support for the variable
+#so this means inverting some scales, also here I do some recoding
 wvs <- wvs_567_core %>%
   mutate(
     # 1–10 scales: reverse so higher = more pro-... (as you want)
@@ -73,14 +73,15 @@ wvs <- wvs_567_core %>%
     trust_ppl,
     female
   )
-
-
 # uid is a substantive unique identifier constructed from wave, country, and interview number,
 # and uniquely identifies each respondent across datasets.
 # row_id is only a technical row counter indicating the position of an observation in the dataset;
 # it changes if the data are sorted or filtered and does not identify individuals.
 
-names(wvs)
+
+
+# Creating necessary variables for analysis -------------------------------
+#Now that I have adjusted the exisitng variables, I create some other variables that will be used in future analysis
 
 #Create categorical var for ideology
 wvs <- wvs %>%
@@ -93,7 +94,6 @@ wvs <- wvs %>%
     ),
     ideology = factor(ideology, levels = c("Left", "Center", "Right"))
   )
-
 
 #alternative coding for ideology
 wvs <- wvs %>%
@@ -108,12 +108,12 @@ wvs <- wvs %>%
   )
 
 
-
 #constructing trust variables
 wvs <- wvs %>%
   mutate(
     # Trust in Market Actors = average trust in banks and big companies
-    #PROBEM: FOR WAVE 5 THE VARIABLE IS NOT RECORDED!
+    # Trust in market actors is measured as the average of trust in banks and big companies.
+    # The index is computed using available information (na.rm = TRUE), so observations with only one non-missing component retain that value; if both components are missing, the index is coded as NA.
     trust_market = rowMeans(
       cbind(trust_banks, trust_companies),
       na.rm = TRUE
@@ -130,7 +130,6 @@ wvs <- wvs %>%
     trust_public = ifelse(is.nan(trust_public), NA_real_, trust_public)
   )
 
-
 #creating relative trust index
 wvs <- wvs %>%
   mutate(
@@ -140,11 +139,7 @@ wvs <- wvs %>%
     trust_market_relative = trust_market - trust_public
   )
 
-names(wvs)
-
-
-
+#Save Final dataset!
 saveRDS(wvs, "data/final/wvs.rds")
 
-View(wvs)
-dim(wvs)
+
