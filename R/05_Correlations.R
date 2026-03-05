@@ -5,7 +5,7 @@ library(ggplot2)
 
 wvs <- readRDS("data/final/wvs.rds")
 
-# Prelimiary test for reframing the papaer--------------------------------------------------------------------
+# Prelimiary test for reframing the paper--------------------------------------------------------------------
 #1) Corr(polselfplacement, Meritocracy), Corr(polselfplacement, Inequality aversion), Corr(polselfplacement, TrustCompanies), Corr(polselfplacement, Trust in public institutions)
   #remember that trust_market is defined also for wave 5 (even if wafe 5 does not have the variable trust_banks recorded) see 02_variable_preparation.R row 115
 selected_countries <- c(32, 818, 231, 276, 380, 724, 752, 826, 840)
@@ -135,10 +135,16 @@ EIC_table <- wvs %>%
   ) %>%
   arrange(country_codeISO)
 
+#insert country names in the table
+EIC_table <- EIC_table %>%
+  mutate(country = country_labels[as.character(country_codeISO)]) %>%
+  relocate(country, .after = country_codeISO)
+
 EIC_table
 
 
 #3)Cross-country regression and visualize the relationship in a scatter plot
+
 #Individual-level regression: privatisation_ic=α+βEIC_c
 # wvs_with_EIC <- wvs %>%
 #   left_join(EIC_table %>% select(country_codeISO, EIC),
@@ -177,9 +183,4 @@ plot_country <- ggplot(reg_data, aes(x = EIC, y = mean_privatisation)) +
   geom_smooth(method = "lm", se = FALSE) +
   theme_minimal()
 
-ggsave("EIC_privatisation_scatter.png",
-       plot = plot_country,
-       width = 8,
-       height = 6,
-       dpi = 300)
-
+plot_country
