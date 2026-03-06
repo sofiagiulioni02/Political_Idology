@@ -8,7 +8,29 @@ wvs <- readRDS("data/final/wvs.rds")
 # Prelimiary test for reframing the paper--------------------------------------------------------------------
 #1) Corr(polselfplacement, Meritocracy), Corr(polselfplacement, Inequality aversion), Corr(polselfplacement, TrustCompanies), Corr(polselfplacement, Trust in public institutions)
   #remember that trust_market is defined also for wave 5 (even if wafe 5 does not have the variable trust_banks recorded) see 02_variable_preparation.R row 115
-selected_countries <- c(32, 818, 231, 276, 380, 724, 752, 826, 840)
+selected_countries <- c(
+  32,   # Argentina
+  50,   # Bangladesh
+  76,   # Brazil
+  818,  # Egypt
+  231,  # Ethiopia
+  276,  # Germany
+  356,  # India
+  360,  # Indonesia
+  380,  # Italy
+  392,  # Japan
+  484,  # Mexico
+  566,  # Nigeria
+  586,  # Pakistan
+  616,  # Poland
+  643,  # Russia
+  710,  # South Africa
+  410,  # South Korea
+  724,  # Spain
+  752,  # Sweden
+  826,  # UK
+  840   # USA
+)
 
 add_stars <- function(p) {
   ifelse(p < 0.001, "***",
@@ -85,19 +107,33 @@ corr_table <- wvs %>%
 # --- Add country names
 country_labels <- c(
   `32`  = "Argentina",
+  `50`  = "Bangladesh",
+  `76`  = "Brazil",
   `818` = "Egypt",
   `231` = "Ethiopia",
   `276` = "Germany",
+  `356` = "India",
+  `360` = "Indonesia",
   `380` = "Italy",
+  `392` = "Japan",
+  `484` = "Mexico",
+  `566` = "Nigeria",
+  `586` = "Pakistan",
+  `616` = "Poland",
+  `643` = "Russia",
+  `710` = "South Africa",
+  `410` = "South Korea",
   `724` = "Spain",
   `752` = "Sweden",
-  `826` = "United Kingdom",
-  `840` = "United States"
+  `826` = "UK",
+  `840` = "USA"
 )
 
 corr_table <- corr_table %>%
   mutate(country = country_labels[as.character(country_codeISO)]) %>%
   select(country_codeISO, country, everything())
+
+View(corr_table)
 
 #transposed table
 corr_table_wide_countries <- corr_table %>%
@@ -109,7 +145,6 @@ View(corr_table_wide_countries)
 
 
 #2)Computing EIC index
-selected_countries <- c(32, 818, 231, 276, 380, 724, 752, 826, 840)
 
 compute_r <- function(data, y) {
   ok <- complete.cases(data$polselfplacement, data[[y]])
@@ -143,6 +178,30 @@ EIC_table <- EIC_table %>%
 EIC_table
 
 
+#3) Comupte correlatoin with privatisation
+compute_r <- function(data, y) {
+  ok <- complete.cases(data$polselfplacement, data[[y]])
+  if (sum(ok) < 3) return(NA_real_)
+  cor(data$polselfplacement[ok], data[[y]][ok], method = "pearson")
+}
+
+Y_table <- wvs %>%
+  filter(country_codeISO %in% selected_countries) %>%
+  group_by(country_codeISO) %>%
+  summarise(
+    Yc = compute_r(cur_data(), "privatisation"),
+    n_pair_privatisation = sum(complete.cases(polselfplacement, privatisation)),
+    .groups = "drop"
+  ) %>%
+  arrange(country_codeISO) %>%
+  mutate(country = country_labels[as.character(country_codeISO)]) %>%
+  relocate(country, .after = country_codeISO)
+#Merge Yc with the EIC table
+regression_data <- Y_table %>%
+  left_join(EIC_table %>% select(country_codeISO, EIC), by = "country_codeISO")
+print(regression_data)
+
+
 #3)Cross-country regression and visualize the relationship in a scatter plot
 
 #Individual-level regression: privatisation_ic=α+βEIC_c
@@ -158,29 +217,54 @@ EIC_table
 # coeftest(model, vcov = vcovCL(model, cluster = ~country_codeISO))
 
 
-#Country-level regression: Mean privatisation_c=α+βEIC_c
+#Country-level regression: Yc= Corr(Ideology, Privatization) =α+βEIC_c
 # Mean privatisation per country
-Y_table <- wvs %>%
-  filter(country_codeISO %in% selected_countries) %>%
-  group_by(country_codeISO) %>%
-  summarise(
-    mean_privatisation = mean(privatisation, na.rm = TRUE),
-    .groups = "drop"
-  )
 
-# Merge with EIC
-reg_data <- EIC_table %>%
-  select(country_codeISO, EIC) %>%
-  left_join(Y_table, by = "country_codeISO")
-
-
-model_country <- lm(mean_privatisation ~ EIC, data = reg_data)
+model_country <- lm(Yc ~ EIC, data = regression_data)
 summary(model_country)
 
+#Preparing for the graph: acronyms
+country_acronyms <- c(
+  "Argentina" = "ARG",
+  "Bangladesh" = "BGD",
+  "Brazil" = "BRA",
+  "Egypt" = "EGY",
+  "Ethiopia" = "ETH",
+  "Germany" = "DEU",
+  "India" = "IND",
+  "Indonesia" = "IDN",
+  "Italy" = "ITA",
+  "Japan" = "JPN",
+  "Mexico" = "MEX",
+  "Nigeria" = "NGA",
+  "Pakistan" = "PAK",
+  "Poland" = "POL",
+  "Russia" = "RUS",
+  "South Africa" = "ZAF",
+  "South Korea" = "KOR",
+  "Spain" = "ESP",
+  "Sweden" = "SWE",
+  "UK" = "GBR",
+  "USA" = "USA"
+)
+
+regression_data <- regression_data %>%
+  mutate(country_code = country_acronyms[country])
+
+
 #scatterplot
-plot_country <- ggplot(reg_data, aes(x = EIC, y = mean_privatisation)) +
+library(ggrepel)
+
+ggplot(regression_data, aes(x = EIC, y = Yc, label = country_code)) +
   geom_point(size = 3) +
-  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(method = "lm", se = TRUE) +
+  geom_text_repel(size = 4) +
+  labs(
+    x = "EIC index",
+    y = "Corr(Ideology, Privatisation)",
+    title = "Country-level relationship between EIC and ideological correlation with privatisation"
+  ) +
   theme_minimal()
 
-plot_country
+getwd()
+
